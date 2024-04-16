@@ -75,6 +75,8 @@ func Run(ctx context.Context, conf any) (err error) {
 		cg = v
 	}
 
+	log.Info("engine run by lup repo")
+
 	if err = util.CreateShutdownScript(); err != nil {
 		log.Error("create shutdown script error:", err)
 	}
