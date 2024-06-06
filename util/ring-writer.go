@@ -2,7 +2,6 @@ package util
 
 import (
 	"sync/atomic"
-
 )
 
 type emptyLocker struct{}
@@ -21,8 +20,6 @@ type IDataFrame[T any] interface {
 	StartWrite() bool    // 开始写入
 	SetSequence(uint32)  // 设置序号
 	GetSequence() uint32 // 获取序号
-	ReaderCount() int32  // 读取者数量
-	Discard() int32      // 如果写入时还有读取者没有离开则废弃该帧，剥离RingBuffer，防止并发读写
 	IsDiscarded() bool   // 是否已废弃
 	IsWriting() bool     // 是否正在写入
 	Wait()               // 阻塞等待可读取
@@ -30,13 +27,13 @@ type IDataFrame[T any] interface {
 }
 
 type RingWriter[T any, F IDataFrame[T]] struct {
-	*Ring[F] `json:"-" yaml:"-"`
-	ReaderCount   atomic.Int32 `json:"-" yaml:"-"`
-	pool          *Ring[F]
-	poolSize      int
-	Size          int
-	LastValue     F
-	constructor   func() F
+	*Ring[F]    `json:"-" yaml:"-"`
+	ReaderCount atomic.Int32 `json:"-" yaml:"-"`
+	pool        *Ring[F]
+	poolSize    int
+	Size        int
+	LastValue   F
+	constructor func() F
 }
 
 func (rb *RingWriter[T, F]) create(n int) (ring *Ring[F]) {
@@ -53,14 +50,9 @@ func (rb *RingWriter[T, F]) Init(n int, constructor func() F) *RingWriter[T, F] 
 	rb.Ring = rb.create(n)
 	rb.Size = n
 	rb.LastValue = rb.Value
+	rb.Value.StartWrite()
 	return rb
 }
-
-// func (rb *RingBuffer[T, F]) MoveNext() F {
-// 	rb.LastValue = rb.Value
-// 	rb.Ring = rb.Next()
-// 	return rb.Value
-// }
 
 func (rb *RingWriter[T, F]) Glow(size int) (newItem *Ring[F]) {
 	if size < rb.poolSize {
@@ -80,7 +72,7 @@ func (rb *RingWriter[T, F]) Glow(size int) (newItem *Ring[F]) {
 	return
 }
 
-func (rb *RingWriter[T, F]) Recycle(r *Ring[F]) {
+func (rb *RingWriter[T, F]) recycle(r *Ring[F]) {
 	rb.poolSize++
 	r.Value.Init()
 	r.Value.Reset()
@@ -93,22 +85,16 @@ func (rb *RingWriter[T, F]) Recycle(r *Ring[F]) {
 
 func (rb *RingWriter[T, F]) Reduce(size int) {
 	r := rb.Unlink(size)
-	if size > 1 {
-		for p := r.Next(); p != r; {
-			next := p.Next() //先保存下一个节点
-			if p.Value.Discard() == 0 {
-				rb.Recycle(p.Prev().Unlink(1))
-			} else {
-				// fmt.Println("Reduce", p.Value.ReaderCount())
-			}
-			p = next
+	for p := r.Next(); p != r; {
+		next := p.Next() //先保存下一个节点
+		if rb.Value.IsDiscarded() {
+			p.Prev().Unlink(1).Value.Reset()
+		} else {
+			rb.recycle(p)
 		}
-	}
-	if r.Value.Discard() == 0 {
-		rb.Recycle(r)
+		p = next
 	}
 	rb.Size -= size
-	return
 }
 
 func (rb *RingWriter[T, F]) Step() (normal bool) {

@@ -21,6 +21,7 @@ func SplitAnnexB[T ~[]byte](frame T, process func(T), delimiter []byte) {
 		}
 	}
 }
+
 type LIRTP = util.ListItem[RTPFrame]
 type RTPFrame struct {
 	*rtp.Packet
@@ -50,7 +51,6 @@ type DataFrame[T any] struct {
 	WriteTime   time.Time    // 写入时间,可用于比较两个帧的先后
 	Sequence    uint32       // 在一个Track中的序号
 	BytesIn     int          // 输入字节数用于计算BPS
-	CanRead     bool         `json:"-" yaml:"-"` // 是否可读取
 	readerCount atomic.Int32 `json:"-" yaml:"-"` // 读取者数量
 	Data        T            `json:"-" yaml:"-"`
 	sync.Cond   `json:"-" yaml:"-"`
@@ -59,17 +59,13 @@ type DataFrame[T any] struct {
 func NewDataFrame[T any]() *DataFrame[T] {
 	return &DataFrame[T]{}
 }
+
 func (df *DataFrame[T]) IsWriting() bool {
-	return !df.CanRead
+	return df.readerCount.Load() == -1
 }
 
 func (df *DataFrame[T]) IsDiscarded() bool {
 	return df.L == nil
-}
-
-func (df *DataFrame[T]) Discard() int32 {
-	df.L = nil //标记为废弃
-	return df.readerCount.Load()
 }
 
 func (df *DataFrame[T]) SetSequence(sequence uint32) {
@@ -84,27 +80,23 @@ func (df *DataFrame[T]) ReaderEnter() int32 {
 	return df.readerCount.Add(1)
 }
 
-func (df *DataFrame[T]) ReaderCount() int32 {
-	return df.readerCount.Load()
-}
-
 func (df *DataFrame[T]) ReaderLeave() int32 {
 	return df.readerCount.Add(-1)
 }
 
 func (df *DataFrame[T]) StartWrite() bool {
-	if df.readerCount.Load() > 0 {
-		df.Discard() //标记为废弃
-		return false
-	} else {
-		df.CanRead = false //标记为正在写入
+	if df.readerCount.CompareAndSwap(0, -1) {
 		return true
 	}
+	df.L = nil //标记为废弃
+	return false
 }
 
 func (df *DataFrame[T]) Ready() {
 	df.WriteTime = time.Now()
-	df.CanRead = true //标记为可读取
+	if !df.readerCount.CompareAndSwap(-1, 0) {
+		panic("Ready")
+	}
 	df.Broadcast()
 }
 

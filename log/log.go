@@ -2,6 +2,7 @@ package log
 
 import (
 	"io"
+	"os"
 
 	// "github.com/mattn/go-colorable"
 	"gopkg.in/yaml.v3"
@@ -12,31 +13,45 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var engineConfig = zapcore.EncoderConfig{
-	// Keys can be anything except the empty string.
-	TimeKey:        "T",
-	LevelKey:       "L",
-	NameKey:        "N",
-	CallerKey:      "C",
-	FunctionKey:    zapcore.OmitKey,
-	MessageKey:     "M",
-	StacktraceKey:  "S",
-	LineEnding:     zapcore.DefaultLineEnding,
-	EncodeLevel:    zapcore.CapitalColorLevelEncoder,
-	EncodeTime:     zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05.000"),
-	EncodeDuration: zapcore.StringDurationEncoder,
-	EncodeCaller:   zapcore.ShortCallerEncoder,
-	EncodeName:     NameEncoder,
-	NewReflectedEncoder: func(w io.Writer) zapcore.ReflectedEncoder {
-		return yaml.NewEncoder(w)
-	},
-}
+var (
+	consoleConfig = zapcore.EncoderConfig{
+		// Keys can be anything except the empty string.
+		TimeKey:        "T",
+		LevelKey:       "L",
+		NameKey:        "N",
+		CallerKey:      "C",
+		FunctionKey:    zapcore.OmitKey,
+		MessageKey:     "M",
+		StacktraceKey:  "S",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+		EncodeTime:     zapcore.TimeEncoderOfLayout("15:04:05.000Z0700"),
+		EncodeDuration: zapcore.StringDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
+		EncodeName:     NameEncoder,
+		NewReflectedEncoder: func(w io.Writer) zapcore.ReflectedEncoder {
+			return yaml.NewEncoder(w)
+		},
+	}
+	fileConfig = zapcore.EncoderConfig{
+		// ... 其他配置保持不变 ...
+		TimeKey:     "T",
+		LevelKey:    "L",
+		MessageKey:  "M",
+		EncodeLevel: zapcore.CapitalLevelEncoder, // 文件使用不带颜色的编码器
+		EncodeTime:  zapcore.TimeEncoderOfLayout("15:04:05.000Z0700"),
+	}
+	consoleEncoder = zapcore.NewConsoleEncoder(consoleConfig)
+	fileEncoder    = zapcore.NewConsoleEncoder(fileConfig)
+)
 var LogLevel = zap.NewAtomicLevelAt(zap.DebugLevel)
 var Trace bool
-var logger *zap.Logger = zap.New(
-	zapcore.NewCore(zapcore.NewConsoleEncoder(engineConfig), zapcore.AddSync(multipleWriter), LogLevel),
-)
-var sugaredLogger *zap.SugaredLogger = logger.Sugar()
+
+var logger = zap.New(zapcore.NewTee(
+	zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stdout), LogLevel),
+	zapcore.NewCore(fileEncoder, zapcore.AddSync(multipleWriter), LogLevel),
+))
+var sugaredLogger = logger.Sugar()
 var LocaleLogger *Logger
 
 func NameEncoder(loggerName string, enc zapcore.PrimitiveArrayEncoder) {
