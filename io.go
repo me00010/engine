@@ -100,7 +100,7 @@ func (io *IO) IsShutdown() bool {
 
 func (i *IO) close(err StopError) bool {
 	if i.IsClosed() {
-		i.Warn("already closed", err...)
+		i.Debug("already closed", err...)
 		return false
 	}
 	i.Info("close", err...)

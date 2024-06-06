@@ -72,7 +72,7 @@ func (rb *RingWriter[T, F]) Glow(size int) (newItem *Ring[F]) {
 	return
 }
 
-func (rb *RingWriter[T, F]) Recycle(r *Ring[F]) {
+func (rb *RingWriter[T, F]) recycle(r *Ring[F]) {
 	rb.poolSize++
 	r.Value.Init()
 	r.Value.Reset()
@@ -87,10 +87,10 @@ func (rb *RingWriter[T, F]) Reduce(size int) {
 	r := rb.Unlink(size)
 	for p := r.Next(); p != r; {
 		next := p.Next() //先保存下一个节点
-		if !rb.Value.IsDiscarded() {
-			rb.Recycle(p.Prev().Unlink(1))
+		if rb.Value.IsDiscarded() {
+			p.Prev().Unlink(1).Value.Reset()
 		} else {
-			// fmt.Println("Reduce", p.Value.ReaderCount())
+			rb.recycle(p)
 		}
 		p = next
 	}

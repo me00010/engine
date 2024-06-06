@@ -420,8 +420,8 @@ func (s *Subscriber) PlayBlock(subType byte) {
 
 func (s *Subscriber) onStop(reason *zapcore.Field) {
 	if !s.Stream.IsClosed() {
-		s.Info("play stop", *reason)
-		if !s.Config.Internal {
+		s.Stop(*reason)
+		if s.Config.Internal {
 			s.Stream.Receive(s.Spesific)
 		}
 	}
