@@ -25,7 +25,7 @@ var (
 		StacktraceKey:  "S",
 		LineEnding:     zapcore.DefaultLineEnding,
 		EncodeLevel:    zapcore.CapitalColorLevelEncoder,
-		EncodeTime:     zapcore.TimeEncoderOfLayout("15:04:05.000Z0700"),
+		EncodeTime:     zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05.000"),
 		EncodeDuration: zapcore.StringDurationEncoder,
 		EncodeCaller:   zapcore.ShortCallerEncoder,
 		EncodeName:     NameEncoder,
@@ -39,7 +39,7 @@ var (
 		LevelKey:    "L",
 		MessageKey:  "M",
 		EncodeLevel: zapcore.CapitalLevelEncoder, // 文件使用不带颜色的编码器
-		EncodeTime:  zapcore.TimeEncoderOfLayout("15:04:05.000Z0700"),
+		EncodeTime:  zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05.000"),
 	}
 	consoleEncoder = zapcore.NewConsoleEncoder(consoleConfig)
 	fileEncoder    = zapcore.NewConsoleEncoder(fileConfig)
