@@ -5,7 +5,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pion/rtp"
@@ -49,25 +48,21 @@ func (r *RTPFrame) Unmarshal(raw []byte) *RTPFrame {
 }
 
 type DataFrame[T any] struct {
-	DeltaTime   uint32       // 相对上一帧时间戳，毫秒
-	WriteTime   time.Time    // 写入时间,可用于比较两个帧的先后
-	Sequence    uint32       // 在一个Track中的序号
-	BytesIn     int          // 输入字节数用于计算BPS
-	readerCount atomic.Int32 `json:"-" yaml:"-"` // 读取者数量
-	Data        T            `json:"-" yaml:"-"`
-	sync.Cond   `json:"-" yaml:"-"`
+	DeltaTime uint32    // 相对上一帧时间戳，毫秒
+	WriteTime time.Time // 写入时间,可用于比较两个帧的先后
+	Sequence  uint32    // 在一个Track中的序号
+	BytesIn   int       // 输入字节数用于计算BPS
+	Data      T         `json:"-" yaml:"-"`
+	lock      sync.RWMutex
+	discard   bool
 }
 
 func NewDataFrame[T any]() *DataFrame[T] {
 	return &DataFrame[T]{}
 }
 
-func (df *DataFrame[T]) IsWriting() bool {
-	return df.readerCount.Load() < 0
-}
-
 func (df *DataFrame[T]) IsDiscarded() bool {
-	return df.L == nil
+	return df.discard
 }
 
 func (df *DataFrame[T]) SetSequence(sequence uint32) {
@@ -78,30 +73,33 @@ func (df *DataFrame[T]) GetSequence() uint32 {
 	return df.Sequence
 }
 
-func (df *DataFrame[T]) ReaderEnter() int32 {
-	return df.readerCount.Add(1)
+func (df *DataFrame[T]) ReaderEnter() {
+	df.lock.RLock()
 }
 
-func (df *DataFrame[T]) ReaderLeave() int32 {
-	return df.readerCount.Add(-1)
+func (df *DataFrame[T]) ReaderTryEnter() bool {
+	return df.lock.TryRLock()
 }
 
-func (df *DataFrame[T]) StartWrite() bool {
-	if df.readerCount.CompareAndSwap(0, -rwmutexMaxReaders) {
-		return true
+func (df *DataFrame[T]) ReaderLeave() {
+	df.lock.RUnlock()
+}
+
+func (df *DataFrame[T]) StartWrite() (ok bool) {
+	ok = df.lock.TryLock()
+	if !ok {
+		df.discard = true
 	}
-	df.L = nil //标记为废弃
-	return false
+	return
 }
 
 func (df *DataFrame[T]) Ready() {
 	df.WriteTime = time.Now()
-	df.readerCount.Add(rwmutexMaxReaders)
-	df.Broadcast()
+	df.lock.Unlock()
 }
 
 func (df *DataFrame[T]) Init() {
-	df.L = util.EmptyLocker
+
 }
 
 func (df *DataFrame[T]) Reset() {
