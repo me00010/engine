@@ -22,6 +22,8 @@ func SplitAnnexB[T ~[]byte](frame T, process func(T), delimiter []byte) {
 	}
 }
 
+const rwmutexMaxReaders = 1 << 30
+
 type LIRTP = util.ListItem[RTPFrame]
 type RTPFrame struct {
 	*rtp.Packet
@@ -61,7 +63,7 @@ func NewDataFrame[T any]() *DataFrame[T] {
 }
 
 func (df *DataFrame[T]) IsWriting() bool {
-	return df.readerCount.Load() == -1
+	return df.readerCount.Load() < 0
 }
 
 func (df *DataFrame[T]) IsDiscarded() bool {
@@ -85,7 +87,7 @@ func (df *DataFrame[T]) ReaderLeave() int32 {
 }
 
 func (df *DataFrame[T]) StartWrite() bool {
-	if df.readerCount.CompareAndSwap(0, -1) {
+	if df.readerCount.CompareAndSwap(0, -rwmutexMaxReaders) {
 		return true
 	}
 	df.L = nil //标记为废弃
@@ -94,9 +96,7 @@ func (df *DataFrame[T]) StartWrite() bool {
 
 func (df *DataFrame[T]) Ready() {
 	df.WriteTime = time.Now()
-	if !df.readerCount.CompareAndSwap(-1, 0) {
-		panic("Ready")
-	}
+	df.readerCount.Add(rwmutexMaxReaders)
 	df.Broadcast()
 }
 

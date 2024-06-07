@@ -15,13 +15,12 @@ func (r *RingReader[T, F]) StartRead(ring *util.Ring[F]) (err error) {
 	if r.Value.IsDiscarded() {
 		return ErrDiscard
 	}
-	if r.Value.IsWriting() {
+	if r.Value.ReaderEnter() < 0 {
 		// t := time.Now()
 		r.Value.Wait()
 		// log.Info("wait", time.Since(t))
 	}
 	r.Count++
-	r.Value.ReaderEnter()
 	return
 }
 
