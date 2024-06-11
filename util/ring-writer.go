@@ -1,6 +1,7 @@
 package util
 
 import (
+	"runtime"
 	"sync/atomic"
 )
 
@@ -12,18 +13,16 @@ func (emptyLocker) Unlock() {}
 var EmptyLocker emptyLocker
 
 type IDataFrame[T any] interface {
-	Init()               // 初始化
-	Reset()              // 重置数据,复用内存
-	Ready()              // 标记为可读取
-	ReaderEnter() int32  // 读取者数量+1
-	ReaderLeave() int32  // 读取者数量-1
-	StartWrite() bool    // 开始写入
-	SetSequence(uint32)  // 设置序号
-	GetSequence() uint32 // 获取序号
-	IsDiscarded() bool   // 是否已废弃
-	IsWriting() bool     // 是否正在写入
-	Wait()               // 阻塞等待可读取
-	Broadcast()          // 广播可读取
+	Init()                // 初始化
+	Reset()               // 重置数据,复用内存
+	Ready()               // 标记为可读取
+	ReaderEnter()         // 读取者数量+1
+	ReaderTryEnter() bool // 尝试读取
+	ReaderLeave()         // 读取者数量-1
+	StartWrite() bool     // 开始写入
+	SetSequence(uint32)   // 设置序号
+	GetSequence() uint32  // 获取序号
+	IsDiscarded() bool    // 是否已废弃
 }
 
 type RingWriter[T any, F IDataFrame[T]] struct {
@@ -34,6 +33,7 @@ type RingWriter[T any, F IDataFrame[T]] struct {
 	Size        int
 	LastValue   F
 	constructor func() F
+	disposeFlag atomic.Int32
 }
 
 func (rb *RingWriter[T, F]) create(n int) (ring *Ring[F]) {
@@ -87,18 +87,29 @@ func (rb *RingWriter[T, F]) Reduce(size int) {
 	r := rb.Unlink(size)
 	for p := r.Next(); p != r; {
 		next := p.Next() //先保存下一个节点
-		if rb.Value.IsDiscarded() {
-			p.Prev().Unlink(1).Value.Reset()
-		} else {
+		if p.Value.StartWrite() {
 			rb.recycle(p)
+			p.Value.Reset()
+			p.Value.Ready()
+		} else {
+			p.Prev().Unlink(1).Value.Reset()
 		}
 		p = next
 	}
 	rb.Size -= size
 }
 
+func (rb *RingWriter[T, F]) Dispose() {
+	for !rb.disposeFlag.CompareAndSwap(0,-1) {
+		runtime.Gosched()
+	}
+	rb.Value.Ready()
+}
+
 func (rb *RingWriter[T, F]) Step() (normal bool) {
-	rb.LastValue.Broadcast() // 防止订阅者还在等待
+	if rb.disposeFlag.Add(1) != 1 {
+		return
+	}
 	rb.LastValue = rb.Value
 	nextSeq := rb.LastValue.GetSequence() + 1
 	next := rb.Next()
@@ -112,6 +123,7 @@ func (rb *RingWriter[T, F]) Step() (normal bool) {
 	}
 	rb.Value.SetSequence(nextSeq)
 	rb.LastValue.Ready()
+	rb.disposeFlag.Add(-1)
 	return
 }
 
