@@ -296,10 +296,8 @@ func findOrCreateStream(streamPath string, waitTimeout time.Duration) (s *Stream
 }
 
 func (r *Stream) resetTimer(dur time.Duration) {
-	if r.timeout != nil {
-		r.Warn("reset timer", zap.Duration("timeout", dur))
+		r.Debug("reset timer", zap.Duration("timeout", dur))
 		r.timeout.Reset(dur)
-	}
 }
 
 func (r *Stream) action(action StreamAction) (ok bool) {
