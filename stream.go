@@ -428,7 +428,7 @@ func (s *Stream) onSuberClose(sub ISubscriber) {
 	if s.Publisher != nil {
 		s.Publisher.OnEvent(sub) // 通知Publisher有订阅者离开，在回调中可以去获取订阅者数量
 	}
-	if (s.DelayCloseTimeout > 0 || s.IdleTimeout > 0) && s.Subscribers.Len() == 0 {
+	if (s.DelayCloseTimeout > 0 || s.IdleTimeout > 0) && s.Subscribers.Len() == 0 && !sub.GetSubscriber().Config.Internal {
 		s.action(ACTION_LASTLEAVE)
 	}
 }
