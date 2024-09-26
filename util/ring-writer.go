@@ -81,7 +81,6 @@ func (rb *RingWriter[T, F]) Reduce(size int) {
 	p := rb.Unlink(size)
 	pSize := size
 	rb.Size -= size
-	defer rb.recycle(p)
 	for i := 0; i < size; i++ {
 		if p.Value.StartWrite() {
 			p.Value.Reset()
@@ -90,6 +89,7 @@ func (rb *RingWriter[T, F]) Reduce(size int) {
 		} else {
 			p.Value.Reset()
 			if pSize == 1 {
+				// last one，无法删除最后一个节点，直接返回即可
 				return
 			}
 			p = p.Prev()
@@ -98,6 +98,7 @@ func (rb *RingWriter[T, F]) Reduce(size int) {
 		}
 		p = p.Next()
 	}
+	rb.recycle(p)
 }
 
 func (rb *RingWriter[T, F]) Dispose() {
