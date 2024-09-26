@@ -80,6 +80,8 @@ func (rb *RingWriter[T, F]) recycle(r *Ring[F]) {
 func (rb *RingWriter[T, F]) Reduce(size int) {
 	p := rb.Unlink(size)
 	pSize := size
+	rb.Size -= size
+	defer rb.recycle(p)
 	for i := 0; i < size; i++ {
 		if p.Value.StartWrite() {
 			p.Value.Reset()
@@ -96,8 +98,6 @@ func (rb *RingWriter[T, F]) Reduce(size int) {
 		}
 		p = p.Next()
 	}
-	rb.recycle(p)
-	rb.Size -= size
 }
 
 func (rb *RingWriter[T, F]) Dispose() {
