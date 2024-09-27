@@ -1,6 +1,7 @@
 package track
 
 import (
+	"github.com/bluenviron/gortsplib/v4/pkg/format"
 	"github.com/bluenviron/gortsplib/v4/pkg/format/rtpmpeg4audio"
 	"go.uber.org/zap"
 	"m7s.live/engine/v4/codec"
@@ -16,6 +17,7 @@ type Audio struct {
 	AVCCHead   []byte // 音频包在AVCC格式中，AAC会有两个字节，其他的只有一个字节
 	codec.AudioSpecificConfig
 	AACDecoder rtpmpeg4audio.Decoder
+	AACFormat  *format.MPEG4Audio // 仅在 rtsp 转发 rtsp 时使用
 }
 
 func (a *Audio) Attach() {
