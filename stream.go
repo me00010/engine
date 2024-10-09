@@ -492,16 +492,10 @@ func (s *Stream) run() {
 							s.Warn("no tracks")
 							if time.Since(s.StartTime) > timeout {
 								lost = true
-								s.action(ACTION_CLOSE)
-								continue
 							}
 						} else if s.Publisher != nil && s.Publisher.IsClosed() {
 							s.Warn("publish is closed", zap.Error(context.Cause(s.publisher)), zap.String("ptr", fmt.Sprintf("%p", s.publisher.Context)))
 							lost = true
-							if len(s.Tracks.Audio)+len(s.Tracks.Video) == 0 {
-								s.action(ACTION_CLOSE)
-								continue
-							}
 						}
 					}
 					if lost {
