@@ -85,7 +85,7 @@ func (pub *Puller) startPull(puller IPuller) {
 		} else {
 			if err = puller.Publish(pub.StreamPath, puller); err != nil {
 				puller.Error("pull publish", zap.Error(err))
-				return
+				continue
 			}
 			if stream != puber.Stream {
 				// 老流中的音视频轨道不可再使用
